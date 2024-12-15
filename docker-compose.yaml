@@ -48,7 +48,8 @@ services:
     restart: unless-stopped
   
   trino:
-    image: trinodb/trino:390
+    image: trinodb/trino:460
+    platform: linux/amd64
     ports:
       - "8080:8080"
     volumes:
