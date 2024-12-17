@@ -1,30 +1,63 @@
 # Minio + Trino + Delta tables
 
+## Quickstart
 
-### Overview
+**Docker compose**
 
-I will describe here the whole process of designing the final solution.
+```
+docker compose up
+```
 
-High level purpose of this experiment is to test data lake architecture with the following components:
- - SQL enigne: Trino
- - Storage: Minio
- - Table format: Delta tables
+Use any compatible SQL client application that is listed in the [docs](https://trino.io/ecosystem/index.html)
 
-### Process
+**Example using DBeaver**
 
-The plan is to start with docker compose setup and then migrate to kubernetes.
+Add new source
 
-**Collecting requirements**
+![dbeaver](assets/dbeaver_config.png)
 
-I started from the most high-level component to determine what we need to configure. In our case that would be Trino
+Open SQL console
+
+![open sql console](assets/open_sql.png)
+
+Run all queries
+
+![query example](assets/query_example.png)
 
 
-First takeaway from the documentation is that we need to also deploy hive metastore first. So let's do that first
+```sql
+CREATE SCHEMA IF NOT EXISTS hive.iris
+    WITH (location = 's3a://iris/');
 
-**Hive metastore**
+CREATE TABLE IF NOT EXISTS hive.iris.iris_parquet
+(
+    sepal_length DOUBLE,
+    sepal_width  DOUBLE,
+    petal_length DOUBLE,
+    petal_width  DOUBLE,
+    class        VARCHAR
+)
+WITH (format = 'PARQUET');
 
-Setup instructions:
-https://hive.apache.org/development/quickstart/#:~:text=%2D-,Metastore,-For%20a%20quick
+INSERT INTO hive.iris.iris_parquet (select random() as sepal_length, random() as sepal_width, random() as petal_length, random() as petal_widths, cast(random(1, 3) as varchar) as class  from unnest(sequence(1,10)));
+
+SELECT * FROM hive.iris.iris_parquet;
+```
+
+## Process
+
+This guide outlines the process of designing and implementing a data lake architecture using the following components:
+
+- Metastore: Hive Metastore
+- SQL Engine: Trino
+- Object Storage: MinIO
+- Table Format: Delta Tables
+
+The initial setup will use Docker Compose for local testing, with plans to migrate to Kubernetes for production deployment.
+
+### Hive metastore
+
+See [setup instructions](https://hive.apache.org/development/quickstart/#:~:text=%2D-,Metastore,-For%20a%20quick)
 
 
 Original: 
@@ -73,8 +106,8 @@ docker run -it --rm \
 
 It seems to work as expected. Schema is initialized and no errors occurred.
 
-Next step is converting to docker compose but before that let's customize the hive image so that we don't have to down load the jar manually.
-We will be downloading the jar file from the [maven repository](https://mvnrepository.com/artifact/org.postgresql/postgresql/42.5.1)
+Next step is to convert docker-run commands to `docker-compose.yaml`. Before we do that  let's customize the hive image so that we don't have to download the jar manually.
+The file can be downloaded from the [maven repository](https://mvnrepository.com/artifact/org.postgresql/postgresql/42.5.1)
 
 ```Dockerfile
 FROM apache/hive:4.0.0
@@ -82,12 +115,7 @@ FROM apache/hive:4.0.0
 ADD --chmod=644 https://repo1.maven.org/maven2/org/postgresql/postgresql/42.5.1/postgresql-42.5.1.jar /opt/hive/lib/postgres.jar
 ```
 
-(Side-note) Some nice debugging commands:
-```
-docker run -it --entrypoint /bin/bash $(docker build -q .)
-```
-
-Then we can once again update the star-up command
+Now we can once again update the star-up command
 
 ```
 docker run -it --rm -p 9083:9083 --env SERVICE_NAME=metastore --env DB_DRIVER=postgres --network host \
@@ -98,7 +126,7 @@ docker run -it --rm -p 9083:9083 --env SERVICE_NAME=metastore --env DB_DRIVER=po
 
 **Docker Compose**
 
-Let's collect what we've done so far in a docker compose file
+Let's collect what we've done so far in a docker-compose file
 
 ```yaml
 services:
@@ -114,8 +142,9 @@ services:
       - metastore_network
     restart: unless-stopped
 
-  metastore:
+  hive-metastore:
     build: .
+    hostname: metastore
     environment:
       SERVICE_NAME: metastore
       DB_DRIVER: postgres
@@ -200,8 +229,8 @@ services:
   minio:
     image: 'quay.io/minio/minio:latest'
     environment:
-      MINIO_ROOT_USER: minio_access_key
-      MINIO_ROOT_PASSWORD: minio_secret_key
+      MINIO_ROOT_USER: user
+      MINIO_ROOT_PASSWORD: password
     ports:
       - '9000:9000'
       - '9001:9001'
@@ -240,7 +269,16 @@ Reading list:
   - [Node config][https://trino.io/docs/current/installation/deployment.html#]
   - [Docker deployment](https://trino.io/docs/current/installation/containers.html#)
 
-TODO catalog configs...
+Based on the documentation we need to create configuration files. We can use the default values for now.
+
+Deployment config:
+- `config.properties`
+- `jvm.properties`
+- `log.properties`
+- `node.properties`
+
+Data catalogs:
+- `hive.properties`
 
 Simplest start-up command
 ```
@@ -250,7 +288,7 @@ docker run --name trino -d -p 8080:8080 --volume $PWD/etc:/etc/trino trinodb/tri
 As service in docker compose: 
 ```yaml
 trino:
-  image: trinodb/trino:390
+  image: trinodb/trino:latest
   ports:
     - "8080:8080"
   volumes:
@@ -259,10 +297,90 @@ trino:
     - trino_network
   depends_on:
     - minio
-    - metastore
+    - hive-metastore
   restart: unless-stopped
 ```
+For testing we can use any Trino client listed in the docs. I'm using executable JAR file with Trino CLI.
 
-I tried to use the latest images but I kept getting low level java errors. Might architecture related but I didn't check.
-I rolled back to the version described in the documentation.
+```
+./trino.jar http://localhost:8080
+```
 
+For testing I will be using SQL queries from similar tutorial [link](https://fithis2001.medium.com/manipulating-delta-lake-tables-on-minio-with-trino-74b25f7ad479)
+
+![test bucket](assets/test_bucket.png)
+
+We can also automate it for future deployments by adding `minio/mc` util to the `docker-compose.yaml` file.
+
+```yaml
+  mc:
+    depends_on:
+      - minio
+    image: minio/mc
+    container_name: mc
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc config host add minio http://minio:9000 user password) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc rm -r --force minio/iris;
+      /usr/bin/mc mb minio/iris;
+      /usr/bin/mc policy set public minio/iris;
+      exit 0;
+      "
+    networks:
+      - trino_network
+```
+
+```sql
+CREATE SCHEMA IF NOT EXISTS hive.iris
+    WITH (location = 's3a://iris/');
+
+CREATE TABLE IF NOT EXISTS hive.iris.iris_parquet
+(
+    sepal_length DOUBLE,
+    sepal_width  DOUBLE,
+    petal_length DOUBLE,
+    petal_width  DOUBLE,
+    class        VARCHAR
+)
+WITH (format = 'PARQUET');
+
+INSERT INTO hive.iris.iris_parquet (select random() as sepal_length, random() as sepal_width, random() as petal_length, random() as petal_widths, cast(random(1, 3) as varchar) as class  from unnest(sequence(1,10)));
+
+SELECT * FROM hive.iris.iris_parquet;
+```
+
+
+
+
+When attempting to create schema we get a dependency error. 
+
+![dependency error](assets/dependency_error.png)
+
+The error is displayed in the Trino's console but after some research I found out it's actually hive related.
+
+The resolution is to add S3 drivers to the metastore image.
+
+```Dockerfile
+FROM apache/hive:4.0.0
+
+# Postgres Driver
+ADD --chmod=644 https://repo1.maven.org/maven2/org/postgresql/postgresql/42.5.1/postgresql-42.5.1.jar /opt/hive/lib/postgres.jar
+
+# S3 Drivers
+ADD --chmod=644 https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.11.1026/aws-java-sdk-bundle-1.11.1026.jar /opt/hive/lib/aws-java-sdk-bundle-1.11.1026.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.2/hadoop-aws-3.3.2.jar /opt/hive/lib/hadoop-aws-3.3.2.jar
+```
+
+Now we get missing credentials error. Again it's hive related and we need to create `core-site.xml` with minio credentials and mount it in `/opt/hadoop/etc/hadoop/core-site.xml`
+
+![missing credentials](assets/missing_credentials.png)
+
+
+### Testing
+
+For testing you can use any client application listed on the Trino's website.
+
+Example configuration for DBeaver
+
+![dbeaver](assets/dbeaver_config.png)
+![dbeaver](assets/dbeaver.png)

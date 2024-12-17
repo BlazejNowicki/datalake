@@ -19,12 +19,12 @@
 
     <property>
         <name>fs.s3a.access.key</name>
-        <value>minio_access_key</value>
+        <value>user</value>
     </property>
 
     <property>
         <name>fs.s3a.secret.key</name>
-        <value>minio_secret_key</value>
+        <value>password</value>
     </property>
 
     <property>
