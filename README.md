@@ -384,3 +384,194 @@ Example configuration for DBeaver
 
 ![dbeaver](assets/dbeaver_config.png)
 ![dbeaver](assets/dbeaver.png)
+
+
+## Helm Chart Configuration for Trino Using Minikube
+
+This section describes the steps to deploy Trino using Helm and Minikube, while connecting it to services like Postgres, Minio, and Hive Metastore running in Docker Compose.
+
+### Prerequisites
+1. Install [Minikube](https://minikube.sigs.k8s.io/docs/start/?arch=%2Fwindows%2Fx86-64%2Fstable%2F.exe+download). Minikube allows you to run Kubernetes locally.
+2. Install [Helm](https://helm.sh/docs/intro/install/). Helm is a package manager for Kubernetes, used to deploy applications via "charts."
+3. Verify the installations by checking their versions:
+   ```bash
+   minikube version
+   helm version
+   ```
+### Helm Chart Configuration
+This project uses a custom Helm chart for Trino, based on the official Trino Helm chart.
+
+> **Note**: The `trino-custom` folder with pre-configured `values.yaml` and `Chart.yaml` files is included in this project. This section explains how the configuration was created for reference only.
+
+**Chart.yaml**:   
+Defines the dependencies and metadata for the Helm chart. Specifies Trino as a dependency, using the official Helm chart as the base.
+
+```yaml
+dependencies:
+- name: trino
+  version: 1.35.0
+  repository: https://trinodb.github.io/charts/
+```
+
+**values.yaml**   
+Overrides default configurations, customizing catalogs for this setup.
+
+```yaml
+catalogs:
+  delta: |-
+    connector.name=delta_lake
+    hive.metastore=thrift
+    hive.metastore.uri=thrift://host.minikube.internal:9083
+    fs.native-s3.enabled=true
+    s3.path-style-access=true
+    s3.endpoint=http://host.minikube.internal:9000
+    s3.aws-access-key=user
+    s3.aws-secret-key=password
+    s3.region=us-east-1
+
+  hive: |-
+    connector.name=hive
+    hive.metastore.uri=thrift://host.minikube.internal:9083
+    fs.native-s3.enabled=true
+    s3.path-style-access=true
+    s3.endpoint=http://host.minikube.internal:9000
+    s3.aws-access-key=user
+    s3.aws-secret-key=password
+    s3.region=us-east-1
+    hive.non-managed-table-writes-enabled=true
+```
+- Configures catalogs for Delta Lake and Hive.
+- `host.minikube.internal`: Allows services in Minikube to communicate with those in Docker Compose.
+- Postgres is not directly referenced in Trino because it serves as the backend for Hive Metastore and not Trino itself.
+
+#### Sequence of Steps
+
+1. Add the Trino repository and update dependencies:
+
+```bash
+helm repo add trino https://trinodb.github.io/charts/
+helm repo update
+```
+
+2. Create a custom Helm chart for Trino:
+
+```bash
+helm create trino-custom
+```
+
+3. Modify `Chart.yaml` to include the Trino dependency.
+
+4. Update Helm dependencies:
+
+```bash
+helm dependency update
+```
+
+5. Update `values.yaml` to include custom configurations for catalogs.
+
+6. Install Trino using the customized `values.yaml` file:
+
+```bash
+helm install my-trino trino/trino -f values.yaml
+```
+
+### Deployment steps
+
+1. **Start Docker Compose Services**  
+   Start the services required for Trino integration (Postgres, Minio, Hive Metastore):
+
+   ```bash
+   docker compose up postgres minio hive-metastore
+   ```
+
+2. **Start Minikube**  
+    Ensure that Docker Desktop is running and launch Minikube with sufficient resource allocations:
+
+    ```bash
+    minikube start --memory=6g --cpus=3 --driver=docker
+    ```
+  - `memory=6g`: Allocates 6GB of memory.
+  - `cpus=3`: Allocates 3 CPU cores.
+  - `driver=docker`: Uses Docker as the virtualization driver.
+
+3. **Check Minikube Status**  
+    Verify that Minikube is running:
+
+    ```bash
+    minikube status
+    ```
+
+    The result should look as follows:   
+
+    ![minikube_status](assets/minikube_status.png)
+
+4. **Add Helm Chart Repository**  
+    Add the Trino Helm chart repository and update:
+
+    ```bash
+    helm repo add trino https://trinodb.github.io/charts/
+    helm repo update
+    ```
+
+    This step ensures that Helm has access to the latest Trino charts, which are required to deploy Trino properly.
+
+5. **Deploy Trino Using Helm**   
+    Navigate to the `trino-custom` directory where the `values.yaml` file is located and deploy the Trino Helm chart:
+
+    ```bash
+    helm install my-trino trino/trino -f values.yaml
+    ```
+
+6. **Check Pod Status**   
+    Confirm that all Trino pods (coordinator and workers) are in the `READY` state. Note that this process may take a few minutes:
+
+    ```bash
+    kubectl get pods
+    ```
+
+    The result should look as follows:   
+
+    ![pods_status](assets/pods_status.png)
+
+7. **Forward Ports**   
+    Forward the Trino service port to access the Trino Web UI locally:
+
+    ```bash
+    kubectl port-forward svc/my-trino-trino 8080:80
+    ```
+
+    This is necessary because Trino is running inside Minikube, and port forwarding allows local access to the Trino Web UI.
+
+8. **Access the Trino Web UI**  
+    Open your browser and go to `http://127.0.0.1:8080`.
+
+
+9. **Connect to Trino Using SQL Client**   
+    Use a SQL client application (e.g., DataGrip) to connect to Trino for querying.
+
+    ![trino_datasource](assets/trino_datasource.png)
+
+
+10. **Test Table Creation**   
+    Create tables in Trino and verify their presence in Minio (S3-compatible storage) to ensure the setup works as expected.
+
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS delta.iris
+    WITH (location = 's3a://iris/');
+
+    CREATE TABLE delta.iris.minikube_test (
+        id INT,
+        name VARCHAR,
+        age INT
+    )
+    WITH (location = 's3a://iris/minikube_test/');
+
+    INSERT INTO delta.iris.minikube_test (id, name, age) VALUES
+        (1, 'Alice', 30),
+        (2, 'Bob', 25);
+
+    SELECT * FROM delta.iris.minikube_test;
+    ```
+
+11. **Access Minio**   
+    Open your browser and navigate to the Minio Console `http://localhost:9001` to verify that the Delta table has been created successfully.
