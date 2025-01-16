@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/basic-auth
+data:
+  username: {{ .Values.postgres.username | b64enc }}
+  password: {{ .Values.postgres.password | b64enc }}
+metadata:
+  name: app-secret
+  labels:
+    app: hive-metastore
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  labels:
+    app: hive-metastore
+spec:
+  instances: 1
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database }}
+      owner: {{ .Values.postgres.username }}
+      secret:
+        name: app-secret
+  storage:
+    size: 1Gi

@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 
   hive-metastore:
-    build: metastore
+    build: ../images/hive-metastore
     hostname: metastore
     environment:
       SERVICE_NAME: metastore
@@ -25,8 +25,8 @@ services:
     ports:
       - "9083:9083"
     volumes:
-      - ./metastore/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
-      - metastore:/opt/hive/data/warehouse
+      # - ./hive-metastore/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./metastore:/opt/hadoop/etc/hadoop
     networks:
       - metastore_network
       - trino_network
