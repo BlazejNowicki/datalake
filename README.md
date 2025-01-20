@@ -605,6 +605,12 @@ data:
     </configuration>
 ```
 
+Note that we are using publicly available image that we created that is hosted on DockerHub. If you'd like you can [build](https://docs.docker.com/get-started/introduction/build-and-push-first-image/) that image yourself and change this line 
+```yaml
+- name: hive-metastore
+  image: nowickib/hive-metastore:latest # <---
+``` 
+
 
 ### Trino
 
