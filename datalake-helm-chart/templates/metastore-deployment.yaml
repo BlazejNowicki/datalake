@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-metastore
+  labels:
+    app: hive-metastore
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive-metastore
+  template:
+    metadata:
+      labels:
+        app: hive-metastore
+    spec:
+      containers:
+      - name: hive-metastore
+        image: nowickib/hive-metastore:latest
+        ports:
+        - containerPort: 9083
+        env:
+        - name: SERVICE_NAME
+          value: metastore
+        - name: DB_DRIVER
+          value: postgres
+        - name: SERVICE_OPTS
+          value: |
+            -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
+            -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://{{ .Values.metastore.postgres.host }}:5432/{{ .Values.metastore.postgres.database }}?sslmode=disable
+            -Djavax.jdo.option.ConnectionUserName={{ .Values.metastore.postgres.username }}
+            -Djavax.jdo.option.ConnectionPassword={{ .Values.metastore.postgres.password }}
+        volumeMounts:
+        - name: hadoop-config
+          mountPath: /opt/hadoop/etc/hadoop/core-site.xml
+          subPath: core-site.xml
+      volumes:
+      - name: hadoop-config
+        configMap:
+          name: hadoop-config
