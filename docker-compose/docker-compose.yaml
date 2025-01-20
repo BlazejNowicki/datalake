@@ -7,12 +7,14 @@ services:
       POSTGRES_DB: metastore_db
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - metastore_network
     restart: unless-stopped
 
   hive-metastore:
-    build: metastore
+    build: ../images/hive-metastore
     hostname: metastore
     environment:
       SERVICE_NAME: metastore
@@ -25,8 +27,7 @@ services:
     ports:
       - "9083:9083"
     volumes:
-      - ./metastore/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
-      - metastore:/opt/hive/data/warehouse
+      - ./metastore:/opt/hadoop/etc/hadoop
     networks:
       - metastore_network
       - trino_network
@@ -43,7 +44,7 @@ services:
       - '9000:9000'
       - '9001:9001'
     volumes:
-      - datalake:/data
+      - minio_data:/data
     command: server /data --console-address ":9001"
     networks:
       - trino_network
@@ -57,7 +58,6 @@ services:
     entrypoint: >
       /bin/sh -c "
       until (/usr/bin/mc config host add minio http://minio:9000 user password) do echo '...waiting...' && sleep 1; done;
-      /usr/bin/mc rm -r --force minio/iris;
       /usr/bin/mc mb minio/iris;
       /usr/bin/mc policy set public minio/iris;
       exit 0;
@@ -87,8 +87,8 @@ networks:
     driver: bridge
 
 volumes:
-  metastore:
+  postgres_data:
     driver: local
 
-  datalake:
+  minio_data:
     driver: local

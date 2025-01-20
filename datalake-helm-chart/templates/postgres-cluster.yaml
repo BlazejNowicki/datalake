@@ -1,0 +1,16 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  labels:
+    app: hive-metastore
+spec:
+  instances: 1
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database }}
+      owner: {{ .Values.postgres.username }}
+      secret:
+        name: app-secret
+  storage:
+    size: 1Gi

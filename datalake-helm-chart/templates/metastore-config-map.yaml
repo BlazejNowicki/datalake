@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hadoop-config
+  labels:
+    app: hive-metastore
+data:
+  core-site.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+
+    <configuration>
+        <property>
+            <name>fs.s3a.endpoint</name>
+            <value>{{ .Values.metastore.s3.endpoint }}</value>
+        </property>
+
+        <property>
+            <name>fs.s3a.access.key</name>
+            <value>{{ .Values.metastore.s3.access_key }}</value>
+        </property>
+
+        <property>
+            <name>fs.s3a.secret.key</name>
+            <value>{{ .Values.metastore.s3.secret_key }}</value>
+        </property>
+
+        <property>
+            <name>fs.s3a.impl</name>
+            <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+        </property>
+
+        <property>
+            <name>fs.s3a.path.style.access</name>
+            <value>true</value>
+        </property>
+
+        <property>
+            <name>fs.s3a.connection.ssl.enabled</name>
+            <value>false</value>
+        </property>
+    </configuration>

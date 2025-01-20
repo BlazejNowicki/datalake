@@ -1,0 +1,39 @@
+metastore:
+  postgres:
+    host: postgres-rw
+    username: hive
+    password: password
+    database: metastore_db
+  s3:
+    endpoint: http://host.minikube.internal:9000
+    access_key: user
+    secret_key: password
+
+postgres:
+  username: hive
+  password: password
+  database: metastore_db
+
+trino:
+  catalogs:
+    delta: |-
+      connector.name=delta_lake
+      hive.metastore=thrift
+      hive.metastore.uri=thrift://hive-metastore:9083
+      fs.native-s3.enabled=true
+      s3.path-style-access=true
+      s3.endpoint=http://host.minikube.internal:9000
+      s3.aws-access-key=user
+      s3.aws-secret-key=password
+      s3.region=us-east-1
+
+    hive: |-
+      connector.name=hive
+      hive.metastore.uri=thrift://hive-metastore:9083      
+      fs.native-s3.enabled=true
+      s3.path-style-access=true
+      s3.endpoint=http://host.minikube.internal:9000
+      s3.aws-access-key=user
+      s3.aws-secret-key=password
+      s3.region=us-east-1
+      hive.non-managed-table-writes-enabled=true
