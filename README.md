@@ -800,5 +800,64 @@ To fix this you can, for example, delete existing volumes related to docker comp
     SELECT * FROM delta.iris.minikube_test;
     ```
 
-11. **Access Minio**   
+12. **Access Minio**   
     Open your browser and navigate to the Minio Console `http://localhost:9001` to verify that the Delta table has been created successfully.
+
+13. **Test Data Lake Functionality with Real-World Data**  
+    Make sure that a bucket named *demo* is created in Minio. After creating the bucket, use the following SQL command to define a schema and table. The table structure is designed to store request logs.
+
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS delta.demo
+    WITH (location = 's3a://demo/');
+
+    CREATE TABLE delta.demo.request_logs
+    (
+        timestamp        BIGINT NOT NULL,
+        user             VARCHAR(50),
+        role             VARCHAR(50),
+        address          VARCHAR(50),
+        clientid         VARCHAR(50),
+        requestid        INT,
+        command          VARCHAR(50),
+        arguments        ARRAY(VARCHAR(100)),
+        exitcode         INT,
+        errormessage     VARCHAR,
+        exceptionmessage VARCHAR,
+        exceptiontrace   VARCHAR,
+        duration         DOUBLE,
+        server           VARCHAR(50),
+        server_pid       BIGINT,
+        server_uuid      VARCHAR(50)
+    )
+    WITH (location = 's3a://demo/request_logs/');
+    ```
+
+14. **Load Data into the Data Lake**  
+    Data loading is performed using Python and the `trino` library to connect to the local Trino instance. The process, including example queries and data insertion steps, is described in the `demo/upload.ipynb` notebook. Refer to this file for detailed instructions.
+
+15. **Example Queries for Testing the Table**    
+    Once the table is created and populated with data, you can run example queries to validate its functionality:
+
+* Top 10 Most Active Users:
+    ```sql
+    SELECT
+    user,
+    COUNT(*) AS activity_count
+    FROM
+        delta.demo.request_logs
+    GROUP BY
+        user
+    ORDER BY
+        activity_count DESC
+    LIMIT 10;
+    ```
+
+* Top 10 Users by Average Duration:
+    ```sql
+    SELECT "user", AVG(duration) AS avg_duration
+    FROM delta.demo.request_logs
+    WHERE duration IS NOT NULL
+    GROUP BY "user"
+    ORDER BY avg_duration DESC
+    LIMIT 10;
+    ```
