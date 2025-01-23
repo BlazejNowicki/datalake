@@ -6,6 +6,8 @@ This repository contains a step-by-step implementation of a open-source DataLake
 
 Used technologies: Trino, Minio, Hive Metastore, Postgres, Docker, Kubernetes, Helm, CloudNativePG
 
+![](assets/datalake.png)
+
 Table of contents:
 
 - [Quickstart](#quickstart)
